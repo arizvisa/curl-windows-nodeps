@@ -128,7 +128,7 @@ Curl_getaddrinfo_ex(const char *nodename,
   /* traverse the addrinfo list */
 
   for(ai = aihead; ai != NULL; ai = ai->ai_next) {
-
+    size_t namelen = ai->ai_canonname ? strlen(ai->ai_canonname) + 1 : 0;
     /* ignore elements with unsupported address family, */
     /* settle family-specific sockaddr structure size.  */
     if(ai->ai_family == AF_INET)
@@ -148,7 +148,7 @@ Curl_getaddrinfo_ex(const char *nodename,
     if((size_t)ai->ai_addrlen < ss_size)
       continue;
 
-    ca = malloc(sizeof(struct Curl_addrinfo));
+    ca = malloc(sizeof(struct Curl_addrinfo) + ss_size + namelen);
     if(!ca) {
       error = EAI_MEMORY;
       break;
@@ -166,22 +166,12 @@ Curl_getaddrinfo_ex(const char *nodename,
     ca->ai_canonname = NULL;
     ca->ai_next      = NULL;
 
-    ca->ai_addr = malloc(ss_size);
-    if(!ca->ai_addr) {
-      error = EAI_MEMORY;
-      free(ca);
-      break;
-    }
+    ca->ai_addr = (void *)((char *)ca + sizeof(struct Curl_addrinfo));
     memcpy(ca->ai_addr, ai->ai_addr, ss_size);
 
-    if(ai->ai_canonname != NULL) {
-      ca->ai_canonname = strdup(ai->ai_canonname);
-      if(!ca->ai_canonname) {
-        error = EAI_MEMORY;
-        free(ca->ai_addr);
-        free(ca);
-        break;
-      }
+    if(namelen) {
+      ca->ai_canonname = (void *)((char *)ca->ai_addr + ss_size);
+      memcpy(ca->ai_canonname, ai->ai_canonname, namelen);
     }
 
     /* if the return list is empty, this becomes the first element */
